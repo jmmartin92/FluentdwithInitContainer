@@ -1,0 +1,128 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "5"
+    kubernetes.io/change-cause: kubectl edit deploy/php-deployment-www --context=sn2
+  creationTimestamp: null
+  generation: 1
+  labels:
+    app: php
+  name: php-deployment-www
+  selfLink: /apis/extensions/v1beta1/namespaces//deployments/php-deployment-www
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: php
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: php
+      name: php
+    spec:
+      containers:
+      - env:
+        - name: KUBERNETES_TRUST_CERT
+          value: "true"
+        - name: BASEURL
+          valueFrom:
+            configMapKeyRef:
+              key: BASEURL
+              name: php-config
+        - name: SERVERNAME
+          valueFrom:
+            configMapKeyRef:
+              key: SERVERNAME
+              name: php-config
+        - name: DBSERVER
+          valueFrom:
+            configMapKeyRef:
+              key: DBSERVER
+              name: php-config
+        - name: DBUSERNAME
+          valueFrom:
+            secretKeyRef:
+              key: DBUSERNAME
+              name: php-secrets
+        - name: DBPASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: DBPASSWORD
+              name: php-secrets
+        image: registry.scm.rabbies.com/concrete5:D51-SNAPSHOT
+        imagePullPolicy: Always
+        livenessProbe:
+          failureThreshold: 40
+          httpGet:
+            httpHeaders:
+            - name: Host
+              value: php-svc
+            path: /api/url/LNESS/EN
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 5
+        name: php
+        ports:
+        - containerPort: 80
+          name: php-http
+          protocol: TCP
+        - containerPort: 443
+          name: php-https
+          protocol: TCP
+        readinessProbe:
+          exec:
+            command:
+            - cat
+            - /var/www/c5/sitemap.xml
+          failureThreshold: 40
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            memory: 2Gi
+          requests:
+            memory: 1536Mi
+        securityContext:
+          privileged: true
+        terminationMessagePath: /dev/termination-log
+        volumeMounts:
+        - mountPath: /var/www/c5/application/files
+          name: php-volume
+          subPath: php-files
+        - mountPath: /var/log/httpd
+          name: apachelogs
+      - args:
+        - /bin/sh
+        - -c
+        - tail -n+1 -f /var/log/httpd/ssl_access_log
+        image: busybox
+        imagePullPolicy: Always
+        name: apachelogs
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        volumeMounts:
+        - mountPath: /var/log/httpd
+          name: apachelogs
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: php-volume
+        persistentVolumeClaim:
+          claimName: nfs-pvc
+      - emptyDir: {}
+        name: apachelogs
+status: {}
